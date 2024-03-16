@@ -35,6 +35,29 @@ public:
 
     CQueue(IMemory &_memory, size_t _size) : size{_size}, memory{_memory}
     {
+        if (size < SIZE_MIN)
+        {
+            throw std::invalid_argument();
+        }
+
+        node_t *node{nullptr};
+
+        for (size_t i = 0; i < size; i++)
+        {
+            node = static_cast<node_t *>(memory.malloc(sizeof(node_t)));
+
+            if (node == nullptr)
+            {
+                // Release the memory blocks of the already created nodes
+                throw std::bad_alloc();
+            }
+
+            (void)new (node) node_t;
+
+            // Link the node
+        }
+
+        tail->next = head;
     }
 
     CQueue(CQueue &&that) noexcept : size{that.size}, count{that.count}, memory{that.memory}, head{that.head}, tail{that.tail}
