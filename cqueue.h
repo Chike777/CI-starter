@@ -33,33 +33,6 @@ public:
     CQueue(const CQueue &) = delete;
     CQueue &operator=(const CQueue &) = delete;
 
-    CQueue(IMemory &_memory, size_t _size) : size{_size}, memory{_memory}
-    {
-        if (size < SIZE_MIN)
-        {
-            throw std::invalid_argument();
-        }
-
-        node_t *node{nullptr};
-
-        for (size_t i = 0; i < size; i++)
-        {
-            node = static_cast<node_t *>(memory.malloc(sizeof(node_t)));
-
-            if (node == nullptr)
-            {
-                // Release the memory blocks of the already created nodes
-                throw std::bad_alloc();
-            }
-
-            (void)new (node) node_t;
-
-            // Link the node
-        }
-
-        tail->next = head;
-    }
-
     CQueue(CQueue &&that) noexcept : size{that.size}, count{that.count}, memory{that.memory}, head{that.head}, tail{that.tail}
     {
         that.size = 0;
@@ -96,24 +69,90 @@ public:
         return *this;
     }
 
+    CQueue(IMemory &_memory, size_t _size) : size{_size}, memory{_memory}
+    {
+        if (size < SIZE_MIN)
+        {
+            throw std::invalid_argument();
+        }
+
+        node_t *node{nullptr};
+
+        for (size_t i = 0; i < size; i++)
+        {
+            node = static_cast<node_t *>(memory.malloc(sizeof(node_t)));
+
+            if (node == nullptr)
+            {
+                // Release the memory blocks of the already created nodes
+                throw std::bad_alloc();
+            }
+
+            (void)new (node) node_t;
+            head = new node(T());
+            tail = head;
+            for (size_t i = 1; i < memory; ++i)
+            {
+                tail_->next = new Node(T());
+                tail_ = tail_->next;
+            }
+
+            tail->next = head;
+        }
+    }
+
     void enqueue(const T &item)
     {
-        // Store the item in the queue
+        // malloc only allocates memory for a node_t. It does not construct a node_t;
+        node_t *node{static_cast<node_t *>(memory.malloc(sizeof(node_t)))};
 
-        // If the queue is full then move head
-        // else increment count
+        if (node != nullptr)
+        {
+            // Placement new is used to construct an object in an allocated block of memory.
+            (void)new (node) node_t{item, nullptr};
+
+            if (head == nullptr)
+            {
+                head = node;
+                tail = head;
+            }
+            else
+            {
+                tail->next = node;
+                tail = node;
+            }
+
+            status = true;
+            count++;
+        }
+
+        return status;
     }
 
     bool dequeue(T &item)
     {
-        bool status{false};
-
         // If the queue is not empty then
         //   set true to status
         //   decrement count
         //   store data in the node pointed by head in item
         //   move head
+        bool status{false};
+        if (head != nullptr)
+        {
+            item = head->data;
 
+            node_t *temp{head};
+            head = head->next;
+            memory.free(temp);
+
+            if (head == nullptr)
+            {
+                tail = head;
+            }
+
+            status = true;
+            count--;
+        }
         return status;
     }
 
@@ -132,9 +171,22 @@ public:
 
         return ((count > 0) ? (value / count) : value);
     }
-
-    void resize(size_t _size)
+    void resize(size_t new_size)
     {
+        if (new_size < SIZE_MIN)
+        {
+            throw std::invalid_argument("New size must be greater than 2");
+        }
+        std::vector<T> new_buffer(new_size);
+        size_t len = std::min(count, new_size);
+        for (size_t i = 0; i < len; ++i)
+        {
+            new_buffer[i] = std::move(buffer[(head + i) % memory]);
+        }
+        buffer = std::move(new_buffer);
+        head = 0;
+        tail = len % new_size;
+        memory = new_size;
     }
 
     void clear(void)
@@ -143,15 +195,76 @@ public:
         head = tail->next;
     }
 
-    bool isfull(void) { return (count == size); }
+    // Read data from the front of the queue
+    bool read(T &item) const
+    {
+        if (isEmpty())
+        {
+            return false; // Queue is empty, cannot read
+        }
+        item = data_[head_];
+        return true; // Successfully read data
+    }
 
-    size_t available(void) { return count; }
+    // Read data from the front of the queue
+    bool read(T &item) const
+    {
+        if (isEmpty())
+        {
+            return false; // Queue is empty, cannot read
+        }
+        item = data_[head_];
+        return true; // Successfully read data
+    }
+    // Write data to the queue
+    void write(const T &item)
+    {
+        if (isFull())
+        {
+            data_[head_] = item;
+            head_ = (head_ + 1) % capacity_;
+        }
+        else
+        {
+            data_[tail_] = item;
+            tail_ = (tail_ + 1) % capacity_;
+            size_++;
+        }
+    }
+    size_t size() const
+    {
+        return count;
+    }
+
+    bool isfull(void)
+    {
+        return (count == size);
+    }
+
+    size_t available(void)
+    {
+        return count;
+    }
 
     size_t capacity(void) { return size; }
 
     ~CQueue()
     {
         // Release the memory blocks allocated for the nodes
+
+        void releaseMemory()
+        {
+            Node *current = head_;
+            while (current != nullptr)
+            {
+                Node *next = current->next;
+                delete current;
+                current = next;
+            }
+            head_ = nullptr;
+            tail_ = nullptr;
+            size_ = 0;
+        }
     }
 };
 
