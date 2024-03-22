@@ -15,8 +15,8 @@ $(TARGET): $(OBJ_FILES)
 $(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-check: $(TARGET)
-	./$<
+check: $(BUILD_DIR) $(TARGET)
+	./$(TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR)

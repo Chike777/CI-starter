@@ -114,7 +114,73 @@ TYPED_TEST(QueueFixture, testAverage)
 }
 
 // Test clear
+TYPED_TEST(QueueFixture, testClear)
+{
+    this->cq->clear();
+    EXPECT_EQ(0, this->cq->available());
+}
+
 // Test overwriting
+TYPED_TEST(QueueFixture, testOverwriting)
+{
+    for (size_t i = 0; i < 2 * this->values.size(); ++i)
+    {
+        this->cq->enqueue(this->values[i % this->values.size()]);
+    }
+
+    EXPECT_EQ(this->cq->capacity(), this->cq->available());
+
+    for (size_t i = 0; i < this->values.size(); ++i)
+    {
+        TypeParam item;
+        EXPECT_TRUE(this->cq->dequeue(item));
+        EXPECT_EQ(item, this->values[i]);
+    }
+}
+
 // Test dequeuing
+TYPED_TEST(QueueFixture, testDequeue)
+{
+    for (size_t i = 0; i < this->values.size(); ++i)
+    {
+        TypeParam item;
+        EXPECT_TRUE(this->cq->dequeue(item));
+        EXPECT_EQ(item, this->values[i]);
+    }
+    EXPECT_EQ(0, this->cq->available());
+}
+
 // Test movable
+
+TYPED_TEST(QueueFixture, testMovable)
+{
+    CQueue<TypeParam> movedQueue(std::move(*this->cq));
+    EXPECT_EQ(this->values.size(), movedQueue.available());
+    EXPECT_EQ(this->values.size(), movedQueue.capacity());
+
+    CQueue<TypeParam> newQueue(this->mock, 3);
+    newQueue = std::move(movedQueue);
+    EXPECT_EQ(this->values.size(), newQueue.available());
+    EXPECT_EQ(this->values.size(), newQueue.capacity());
+}
+
 // Test resize
+TYPED_TEST(QueueFixture, Resize)
+{
+    {
+        ASSERT_NO_THROW(this->cq->resize(2));
+        EXPECT_EQ(2, this->cq->capacity());
+    }
+
+    {
+        ASSERT_NO_THROW(this->cq->resize(7));
+        EXPECT_EQ(7, this->cq->capacity());
+    }
+
+    // test for memory allocation failure
+    {
+        EXPECT_CALL(this->mock, malloc(::testing::_))
+            .Times(::testing::AnyNumber())
+            .WillRepeatedly(::testing::Return(nullptr));
+    }
+}
